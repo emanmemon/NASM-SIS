@@ -1,0 +1,704 @@
+; ===============================================================
+; Student Information System - NASM DOSBox COM (Fixed & Optimized)
+; ===============================================================
+[BITS 16]
+[ORG 0x100]
+
+jmp start
+
+; ===== DATA =====
+mmenu db 13,10,"=== STUDENT INFO SYSTEM ===",13,10
+      db "1.Add  2.View  3.Status",13,10
+      db "4.Fee  5.Attend 6.Result",13,10
+      db "7.Health  0.Exit",13,10
+      db "Choice: $"
+
+pid   db 13,10,"ID(3): $"
+pnam  db "Name: $"
+page  db "Age: $"
+pcls  db "Class: $"
+pst   db "Status(1=Active 2=Left 3=Done): $"
+pfee  db "Fee: $"
+ppd   db "Paid?Y/N: $"
+pmk   db "Marks(000-100): $"
+pdis  db "Disability?Y/N: $"
+pnot  db "Note: $"
+patt  db "Present?Y/N: $"
+psch  db 13,10,"Search ID: $"
+pnst  db "NewStatus(1/2/3): $"
+
+madd  db 13,10,"Added!",13,10,"$"
+mnf   db 13,10,"Not Found!",13,10,"$"
+mful  db 13,10,"DB Full!",13,10,"$"
+mnon  db 13,10,"No Records!",13,10,"$"
+mupd  db 13,10,"Updated!",13,10,"$"
+mbye  db 13,10,"Bye!",13,10,"$"
+many  db 13,10,"Any key...$"
+mnl   db 13,10,"$"
+mpip  db "|$"
+minv  db 13,10,"Invalid!",13,10,"$"
+
+hstu  db 13,10,"ID |Name           |Age|Class|Stat",13,10
+      db "---+---------------+---+-----+----",13,10,"$"
+hfee  db 13,10,"ID |Fee  |Paid",13,10,"---+-----+----",13,10,"$"
+hatt  db 13,10,"ID |Pres|Tot",13,10,"---+----+---",13,10,"$"
+hres  db 13,10,"ID |Marks|Grade",13,10,"---+-----+-----",13,10,"$"
+hhlt  db 13,10,"ID |Dis|Note",13,10,"---+---+----",13,10,"$"
+
+lact  db "Active$"
+llft  db "Left  $"
+ldne  db "Done  $"
+lyes  db "Yes$"
+lno   db "No $"
+
+; Record Structure: 50 bytes total
+REC equ 50
+MAX equ 10
+
+cnt  db 0
+db_  times MAX*REC db 32
+ib   times 28 db 0
+
+; ===== START =====
+start:
+    call cls
+mloop:
+    call cls
+    mov dx,mmenu
+    call ps
+    call rc
+    cmp al,'0'
+    je  .ex
+    cmp al,'1'
+    je  .a1
+    cmp al,'2'
+    je  .a2
+    cmp al,'3'
+    je  .a3
+    cmp al,'4'
+    je  .a4
+    cmp al,'5'
+    je  .a5
+    cmp al,'6'
+    je  .a6
+    cmp al,'7'
+    je  .a7
+    mov dx,minv
+    call ps
+    call ak
+    jmp mloop
+.ex: mov dx,mbye
+    call ps
+    mov ah,4Ch
+    int 21h
+.a1: call mod_add    
+    jmp mloop
+.a2: call mod_view   
+    jmp mloop
+.a3: call mod_stat   
+    jmp mloop
+.a4: call mod_fee    
+    jmp mloop
+.a5: call mod_att    
+    jmp mloop
+.a6: call mod_res    
+    jmp mloop
+.a7: call mod_hlt    
+    jmp mloop
+
+; ===== MODULE 1: ADD =====
+mod_add:
+    call cls
+    mov al,[cnt]
+    cmp al,MAX
+    jl  .ok
+    mov dx,mful
+    call ps
+    call ak
+    ret
+.ok:
+    call getrec   ; SI = new slot
+
+    mov dx,pid
+    call ps
+    call rs
+    mov di,si
+    mov cx,3
+    call cpy
+
+    mov dx,pnam
+    call ps
+    call rs
+    mov di,si
+    add di,3
+    mov cx,15
+    call cpy
+
+    mov dx,page
+    call ps
+    call rs
+    mov di,si
+    add di,18
+    mov cx,2
+    call cpy
+
+    mov dx,pcls
+    call ps
+    call rs
+    mov di,si
+    add di,20
+    mov cx,5
+    call cpy
+
+    mov dx,pst
+    call ps
+    call rc
+    sub al,'0'
+    cmp al,1
+    jl  .ds
+    cmp al,3
+    jg  .ds
+    mov [si+25],al
+    jmp .d2
+.ds:mov byte[si+25],1
+.d2:
+    ; Pad fields dynamically with space characters instead of null
+    mov byte[si+31],0
+    mov byte[si+32],0
+    mov byte[si+33],0
+    mov byte[si+37],0
+    inc byte[cnt]
+    mov dx,madd
+    call ps
+    call ak
+    ret
+
+getrec:
+    xor bx,bx
+    mov bl,[cnt]
+    mov ax,REC
+    mul bl
+    mov si,db_
+    add si,ax
+    ret
+
+; ===== MODULE 2: VIEW =====
+mod_view:
+    call cls
+    mov al,[cnt]
+    cmp al,0
+    jne .ok
+    mov dx,mnon
+    call ps
+    call ak
+    ret
+.ok:
+    mov dx,hstu
+    call ps
+    xor cx,cx
+    mov si,db_
+.lp:
+    mov al,[cnt]
+    cmp cl,al
+    jge .dn
+    call prow
+    add si,REC
+    inc cl
+    jmp .lp
+.dn:call ak
+    ret
+
+prow:
+    push cx
+    mov cx,3
+    mov di,si
+    call pf
+    mov dx,mpip
+    call ps
+    mov cx,15
+    mov di,si
+    add di,3
+    call pf
+    mov dx,mpip
+    call ps
+    mov cx,2
+    mov di,si
+    add di,18
+    call pf
+    mov dx,mpip
+    call ps
+    mov cx,5
+    mov di,si
+    add di,20
+    call pf
+    mov dx,mpip
+    call ps
+    mov al,[si+25]
+    cmp al,2
+    je  .sl
+    cmp al,3
+    je  .sp
+    mov dx,lact
+    jmp .sd
+.sl:mov dx,llft
+    jmp .sd
+.sp:mov dx,ldne
+.sd:call ps
+    mov dx,mnl
+    call ps
+    pop cx
+    ret
+
+; ===== MODULE 3: STATUS =====
+mod_stat:
+    call cls
+    mov dx,psch
+    call ps
+    call rs
+    call find
+    cmp ax,0
+    jne .ok
+    mov dx,mnf
+    call ps
+    call ak
+    ret
+.ok:
+    mov dx,pnst
+    call ps
+    call rc
+    sub al,'0'
+    cmp al,1
+    jl  .bd
+    cmp al,3
+    jg  .bd
+    mov [si+25],al
+    mov dx,mupd
+    call ps
+    call ak
+    ret
+.bd:mov dx,minv
+    call ps
+    call ak
+    ret
+
+; ===== MODULE 4: FEE =====
+mod_fee:
+    call cls
+    mov dx,psch
+    call ps
+    call rs
+    call find
+    cmp ax,0
+    jne .ok
+    mov dx,mnf
+    call ps
+    call ak
+    ret
+.ok:
+    mov dx,hfee
+    call ps
+    push cx
+    mov cx,3
+    mov di,si
+    call pf
+    mov dx,mpip
+    call ps
+    mov cx,5
+    mov di,si
+    add di,26
+    call pf
+    mov dx,mpip
+    call ps
+    mov al,[si+31]
+    cmp al,1
+    je  .y
+    mov dx,lno
+    jmp .p
+.y: mov dx,lyes
+.p: call ps
+    mov dx,mnl
+    call ps
+    pop cx
+    
+    mov dx,pfee
+    call ps
+    call rs
+    mov di,si
+    add di,26
+    mov cx,5
+    call cpy
+    mov dx,ppd
+    call ps
+    call rc
+    cmp al,'Y'
+    je  .py
+    cmp al,'y'
+    je  .py
+    mov byte[si+31],0
+    jmp .pd
+.py:mov byte[si+31],1
+.pd:mov dx,mupd
+    call ps
+    call ak
+    ret
+
+; ===== MODULE 5: ATTENDANCE =====
+mod_att:
+    call cls
+    mov dx,psch
+    call ps
+    call rs
+    call find
+    cmp ax,0
+    jne .ok
+    mov dx,mnf
+    call ps
+    call ak
+    ret
+.ok:
+    mov dx,hatt
+    call ps
+    push cx
+    mov cx,3
+    mov di,si
+    call pf
+    mov dx,mpip
+    call ps
+    mov al,[si+32]
+    call pb
+    mov dx,mpip
+    call ps
+    mov al,[si+33]
+    call pb
+    mov dx,mnl
+    call ps
+    pop cx
+    inc byte[si+33]
+    mov dx,patt
+    call ps
+    call rc
+    cmp al,'Y'
+    je  .y
+    cmp al,'y'
+    je  .y
+    jmp .d
+.y: inc byte[si+32]
+.d: mov dx,mupd
+    call ps
+    call ak
+    ret
+
+; ===== MODULE 6: RESULTS =====
+mod_res:
+    call cls
+    mov dx,psch
+    call ps
+    call rs
+    call find
+    cmp ax,0
+    jne .ok
+    mov dx,mnf
+    call ps
+    call ak
+    ret
+.ok:
+    mov dx,hres
+    call ps
+    push cx
+    mov cx,3
+    mov di,si
+    call pf
+    mov dx,mpip
+    call ps
+    mov cx,3
+    mov di,si
+    add di,34
+    call pf
+    mov dx,mpip
+    call ps
+    mov bx,si
+    add bx,34
+    call s2n
+    call pgr
+    mov dx,mnl
+    call ps
+    pop cx
+    mov dx,pmk
+    call ps
+    call rs
+    mov di,si
+    add di,34
+    mov cx,3
+    call cpy
+    mov dx,mupd
+    call ps
+    call ak
+    ret
+
+pgr:
+    cmp al,90
+    jge .a
+    cmp al,75
+    jge .b
+    cmp al,60
+    jge .c
+    cmp al,50
+    jge .d
+    mov ah,02h
+    mov dl,'F'
+    int 21h
+    ret
+.a: mov ah,02h
+    mov dl,'A'
+    int 21h
+    ret
+.b: mov ah,02h
+    mov dl,'B'
+    int 21h
+    ret
+.c: mov ah,02h
+    mov dl,'C'
+    int 21h
+    ret
+.d: mov ah,02h
+    mov dl,'D'
+    int 21h
+    ret
+
+; Fixed String-to-Number logic for accurate multidigit marks conversion
+s2n:
+    xor ax,ax
+    xor cx,cx
+    mov cl,[bx]
+    sub cl,'0'
+    cmp cl,9
+    ja  .dn
+    mov al,cl
+    
+    mov dl,[bx+1]
+    cmp dl,' '
+    je  .dn
+    sub dl,'0'
+    cmp dl,9
+    ja  .dn
+    mov ch,10
+    mul ch
+    add al,dl
+    
+    mov dl,[bx+2]
+    cmp dl,' '
+    je  .dn
+    sub dl,'0'
+    cmp dl,9
+    ja  .dn
+    mov ch,10
+    mul ch
+    add al,dl
+.dn:ret
+
+; ===== MODULE 7: HEALTH =====
+mod_hlt:
+    call cls
+    mov dx,psch
+    call ps
+    call rs
+    call find
+    cmp ax,0
+    jne .ok
+    mov dx,mnf
+    call ps
+    call ak
+    ret
+.ok:
+    mov dx,hhlt
+    call ps
+    push cx
+    mov cx,3
+    mov di,si
+    call pf
+    mov dx,mpip
+    call ps
+    mov al,[si+37]
+    cmp al,1
+    je  .y
+    mov dx,lno
+    jmp .d
+.y: mov dx,lyes
+.d: call ps
+    mov dx,mpip
+    call ps
+    mov cx,12
+    mov di,si
+    add di,38
+    call pf
+    mov dx,mnl
+    call ps
+    pop cx
+    mov dx,pdis
+    call ps
+    call rc
+    cmp al,'Y'
+    je  .dy
+    cmp al,'y'
+    je  .dy
+    mov byte[si+37],0
+    jmp .dn
+.dy:mov byte[si+37],1
+.dn:
+    mov dx,pnot
+    call ps
+    call rs
+    mov di,si
+    add di,38
+    mov cx,12
+    call cpy
+    mov dx,mupd
+    call ps
+    call ak
+    ret
+
+; ===== HELPERS =====
+find:
+    xor cx,cx
+    mov si,db_
+.lp:
+    mov al,[cnt]
+    cmp cl,al
+    jge .nf
+    mov al,[si]
+    cmp al,[ib]
+    jne .nx
+    mov al,[si+1]
+    cmp al,[ib+1]
+    jne .nx
+    mov al,[si+2]
+    cmp al,[ib+2]
+    jne .nx
+    mov ax,1
+    ret
+.nx:add si,REC
+    inc cl
+    jmp .lp
+.nf:mov ax,0
+    ret
+
+cpy:
+    push si
+    push cx
+    mov si,ib
+.lp:
+    cmp cx,0
+    je  .dn
+    mov al,[si]
+    cmp al,0
+    je  .pd
+    mov [di],al
+    inc si
+    inc di
+    dec cx
+    jmp .lp
+.pd:mov byte[di],' '
+    inc di
+    dec cx
+    jmp .pd
+.dn:pop cx
+    pop si
+    ret
+
+pf:
+    push cx
+.lp:
+    cmp cx,0
+    je  .dn
+    mov ah,02h
+    mov dl,[di]
+    cmp dl,0
+    jne .ok
+    mov dl,' '
+.ok:int 21h
+    inc di
+    dec cx
+    jmp .lp
+.dn:pop cx
+    ret
+
+pb:
+    push ax
+    push dx
+    xor ah,ah
+    mov dl,10
+    div dl
+    push ax
+    cmp al,0
+    je  .sk
+    add al,'0'
+    mov dl,al
+    mov ah,02h
+    int 21h
+.sk:pop ax
+    add ah,'0'
+    mov dl,ah
+    mov ah,02h
+    int 21h
+    pop dx
+    pop ax
+    ret
+
+ps:
+    mov ah,09h
+    int 21h
+    ret
+
+rc:
+    mov ah,01h
+    int 21h
+    ret
+
+rs:
+    push bx
+    xor bx,bx
+.lp:
+    mov ah,01h
+    int 21h
+    cmp al,13
+    je  .dn
+    cmp al,8
+    je  .bk
+    cmp bx,25
+    jge .lp
+    mov [ib+bx],al
+    inc bx
+    jmp .lp
+.bk:cmp bx,0
+    je  .lp
+    dec bx
+    mov ah,02h
+    mov dl,8
+    int 21h
+    mov dl,' '
+    int 21h
+    mov dl,8
+    int 21h
+    jmp .lp
+.dn:mov byte[ib+bx],0
+.pd:cmp bx,25
+    jge .ex
+    mov byte[ib+bx],' '
+    inc bx
+    jmp .pd
+.ex:mov dx,mnl
+    call ps
+    pop bx
+    ret
+
+ak:
+    mov dx,many
+    call ps
+    mov ah,01h
+    int 21h
+    ret
+
+cls:
+    mov ax,0003h
+    int 10h
+    ret
